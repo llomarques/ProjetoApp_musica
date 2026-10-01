@@ -53,6 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
         context,
         MaterialPageRoute(
           builder: (context) => HomeScreen(
+            usuarioId: int.parse(usuario['id'].toString()),
             nomeUsuario: usuario['nome'].toString(),
             username: usuario['username'].toString(),
           ),

@@ -1,14 +1,25 @@
-import 'package:flutter/material.dart';
 
-class HomeScreen extends StatelessWidget {
+import 'package:flutter/material.dart';
+import '../services/favorito_service.dart';
+
+class HomeScreen extends StatefulWidget {
+  final int usuarioId;
   final String nomeUsuario;
   final String username;
 
   const HomeScreen({
     super.key,
+    required this.usuarioId,
     required this.nomeUsuario,
     required this.username,
   });
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final _favoritoService = FavoritoService();
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +28,13 @@ class HomeScreen extends StatelessWidget {
         title: const Text('VibeOn'),
         actions: [
           IconButton(
-            onPressed: () {},
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Perfil em construção!'),
+                ),
+              );
+            },
             icon: const Icon(Icons.person_outline),
             tooltip: 'Perfil',
           ),
@@ -29,7 +46,7 @@ class HomeScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Olá, $nomeUsuario! ',
+              'Olá, ${widget.nomeUsuario}! 👋',
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -61,7 +78,7 @@ class HomeScreen extends StatelessWidget {
             Wrap(
               spacing: 12,
               runSpacing: 12,
-              children: [
+              children: const [
                 _VibeButton(
                   icon: Icons.sentiment_satisfied_alt,
                   label: 'Feliz',
@@ -93,19 +110,25 @@ class HomeScreen extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            const _MusicaCard(
+            _MusicaCard(
+              usuarioId: widget.usuarioId,
+              favoritoService: _favoritoService,
               titulo: 'Vibe do Dia',
               artista: 'VibeOn',
               icon: Icons.music_note,
             ),
 
-            const _MusicaCard(
+            _MusicaCard(
+              usuarioId: widget.usuarioId,
+              favoritoService: _favoritoService,
               titulo: 'Noite Tranquila',
               artista: 'VibeOn',
               icon: Icons.nightlight,
             ),
 
-            const _MusicaCard(
+            _MusicaCard(
+              usuarioId: widget.usuarioId,
+              favoritoService: _favoritoService,
               titulo: 'Energia Total',
               artista: 'VibeOn',
               icon: Icons.bolt,
@@ -116,6 +139,8 @@ class HomeScreen extends StatelessWidget {
     );
   }
 }
+
+// BOTÕES DE VIBE
 
 class _VibeButton extends StatelessWidget {
   final IconData icon;
@@ -129,23 +154,32 @@ class _VibeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
-      onPressed: () {},
+      onPressed: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Vibe selecionada: $label'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
       icon: Icon(icon),
       label: Text(label),
     );
   }
 }
 
-// --------------------------------------------------
-// CARD DA MÚSICA
-// --------------------------------------------------
+// CARD DE MÚSICA COM FAVORITOS
 
 class _MusicaCard extends StatefulWidget {
+  final int usuarioId;
+  final FavoritoService favoritoService;
   final String titulo;
   final String artista;
   final IconData icon;
 
   const _MusicaCard({
+    required this.usuarioId,
+    required this.favoritoService,
     required this.titulo,
     required this.artista,
     required this.icon,
@@ -157,22 +191,53 @@ class _MusicaCard extends StatefulWidget {
 
 class _MusicaCardState extends State<_MusicaCard> {
   bool _favoritada = false;
+  bool _salvando = false;
 
-  void _alternarFavorito() {
+  Future<void> _alternarFavorito() async {
+    if (_favoritada || _salvando) return;
+
     setState(() {
-      _favoritada = !_favoritada;
+      _salvando = true;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _favoritada
-              ? '${widget.titulo} adicionada aos favoritos! 💜 '
-              : '${widget.titulo} removida dos favoritos.',
+    try {
+      final mensagem =
+          await widget.favoritoService.adicionarFavorito(
+        usuarioId: widget.usuarioId,
+        musica: widget.titulo,
+        artista: widget.artista,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _favoritada = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(mensagem),
+          duration: const Duration(seconds: 2),
         ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().replaceFirst('Exception: ', ''),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _salvando = false;
+        });
+      }
+    }
   }
 
   @override
@@ -196,12 +261,20 @@ class _MusicaCardState extends State<_MusicaCard> {
         ),
         subtitle: Text(widget.artista),
         trailing: IconButton(
-          onPressed: _alternarFavorito,
-          icon: Icon(
-            _favoritada
-                ? Icons.favorite
-                : Icons.favorite_border,
-          ),
+          onPressed: _salvando ? null : _alternarFavorito,
+          icon: _salvando
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
+                )
+              : Icon(
+                  _favoritada
+                      ? Icons.favorite
+                      : Icons.favorite_border,
+                ),
           color: _favoritada
               ? const Color(0xFFE040FB)
               : null,
